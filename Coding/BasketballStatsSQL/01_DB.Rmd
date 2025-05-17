@@ -1,0 +1,127 @@
+---
+title: "Basketball Statistics SQL"
+output: html_notebook
+---
+
+```{r}
+# Install necessary libraries
+library(DBI)
+library(RSQLite)
+
+# Connect to SQLite database
+conn <- dbConnect(RSQLite::SQLite(), "basketball.db")
+```
+
+```{r}
+# Create Teams table
+dbExecute(conn, "
+  CREATE TABLE Teams (
+  team_id INTEGER PRIMARY KEY,
+  team_name TEXT, 
+  city TEXT
+  );
+")
+```
+```{r}
+# Create Players table
+dbExecute(conn, "
+  CREATE TABLE Players (
+    player_id INTEGER PRIMARY KEY,
+    name TEXT,
+    team_id INTEGER,
+    position TEXT,
+    height_cm INTEGER,
+    weight_kg INTEGER,
+    FOREIGN KEY (team_id) REFERENCES Teams(team_id)
+  );
+")
+```
+
+```{r}
+# Create Games table
+dbExecute(conn, "
+  CREATE TABLE Games (
+    game_id INTEGER PRIMARY KEY,
+    date TEXT,
+    home_team_id INTEGER,
+    away_team_id INTEGER,
+    home_score INTEGER,
+    away_score INTEGER,
+    FOREIGN KEY (home_team_id) REFERENCES Teams(team_id),
+    FOREIGN KEY (away_team_id) REFERENCES Teams(team_id)
+  );
+")
+```
+
+```{r}
+# Create Stats table
+dbExecute(conn, "
+  CREATE TABLE Stats (
+    game_id INTEGER,
+    player_id INTEGER,
+    points INTEGER,
+    rebounds INTEGER,
+    assists INTEGER,
+    minutes_played INTEGER,
+    FOREIGN KEY (game_id) REFERENCES Games(game_id),
+    FOREIGN KEY (player_id) REFERENCES Players(player_id)
+  );
+")
+```
+
+```{r}
+# Insert basic data in Teams
+dbExecute(conn, "INSERT INTO Teams VALUES (1, 'Sharks', 'Boston'),
+          (2, 'Wolves', 'Chicago');")
+
+# Insert Players
+dbExecute(conn, "
+  INSERT INTO Players VALUES
+  (1, 'John Doe', 1, 'Guard', 188, 82),
+  (2, 'Jane Smith', 2, 'Forward', 192, 76);
+")
+
+# Insert Games
+dbExecute(conn, "
+  INSERT INTO Games VALUES
+  (1, '2025-01-01', 1, 2, 101, 95);
+")
+
+# Insert Stats
+dbExecute(conn, "
+  INSERT INTO Stats VALUES
+  (1, 1, 24, 4, 6, 35),
+  (1, 2, 18, 7, 3, 38);
+")
+```
+
+```{r}
+# Total points per player
+dbGetQuery(conn, "
+  SELECT p.name, SUM(s.points) AS total_points
+  FROM Players p
+  JOIN Stats s ON p.player_id = s.player_id
+  GROUP BY p.name
+  ORDER BY total_points DESC;
+")
+```
+
+```{r}
+# Team win/loss summary
+dbGetQuery(conn, "
+  WITH results AS (
+    SELECT
+      game_id,
+      CASE
+        WHEN home_score > away_score THEN home_team_id
+        ELSE away_team_id
+      END AS winner_id
+    FROM Games
+  )
+  SELECT t.team_name, COUNT(*) AS wins
+  FROM results r
+  JOIN Teams t ON r.winner_id = t.team_id
+  GROUP BY t.team_name;
+")
+```
+
